@@ -61,16 +61,7 @@ Le code de `Application_Mobile` consomme :
 
 via `api/profileClient.js` et `context/ProfileContext.js`.
 
-## Routes exposées
-
-### Routes métier
-
-- `GET /api/me`
-- `PUT /api/me`
-- `GET /api/profile`
-- `PUT /api/profile`
-
-### Routes de debug
+## Routes de debug
 
 - `GET /api/ping`
 - `GET /api/debug-token`
