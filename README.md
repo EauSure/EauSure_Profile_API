@@ -33,8 +33,7 @@ L'écosystème backend d'EauSûre repose sur une fragmentation fonctionnelle des
 Dans cette architecture, `Application_Profile_API` se concentre sur :
 - **lecture du profil enrichi** ;
 - **mise à jour du profil et des préférences** ;
-- **provisionnement automatique d'un profil vide si nécessaire** ;
-- **outils de debug** pour le token et la base.
+- **provisionnement automatique d'un profil vide si nécessaire**.
 
 ## Stack
 
@@ -51,21 +50,11 @@ Le code de `Application_Web` consomme :
 - `GET /api/me`
 - `PUT /api/me`
 
-via [app/api/user/me/route.ts](../Application_Web/app/api/user/me/route.ts).
-
 ### Depuis `Application_Mobile`
 
 Le code de `Application_Mobile` consomme :
-- `GET /me`
-- `PUT /me`
-
-via `api/profileClient.js` et `context/ProfileContext.js`.
-
-## Routes de debug
-
-- `GET /api/ping`
-- `GET /api/debug-token`
-- `GET /api/debug-db`
+- `GET /api/me`
+- `PUT /api/me`
 
 ## Variables d'environnement
 
@@ -73,8 +62,6 @@ Variables nécessaires au fonctionnement de base :
 - `MONGO_URI`
 - `JWT_SECRET`
 - `PORT`
-
-Variables optionnelles :
 - `LOG_LEVEL`
 
 Valeurs attendues pour `LOG_LEVEL` dans le code :
@@ -82,7 +69,6 @@ Valeurs attendues pour `LOG_LEVEL` dans le code :
 - `info`
 - `warn`
 - `error`
-
 ## Fonctionnement
 
 ### Authentification
@@ -131,27 +117,3 @@ Préférences prises en charge :
 - `preferences.security.*`
 - `timezone`
 
-### Route `/api/profile`
-
-Cette route manipule plus directement le document `userProfiles`.
-
-`GET /api/profile` :
-- lit le profil brut ;
-- crée un profil vide si absent.
-
-`PUT /api/profile` :
-- applique une mise à jour brute ;
-- protège `userId`, `_id`, `createdAt` et `updatedAt`.
-
-## Point d'audit
-
-Le code client observé utilise surtout `/api/me`, pas `/api/profile`. Cela ne rend pas `/api/profile` inutile automatiquement, mais cela suggère que `/api/me` est aujourd'hui la vraie route métier principale.
-
-De même, les routes `debug-token` et `debug-db` n'ont pas été retrouvées dans `Application_Web` ni `Application_Mobile` pendant cet audit. Elles semblent surtout destinées au diagnostic manuel.
-
-## Lancement local
-
-```bash
-npm install
-npm run dev
-```

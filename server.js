@@ -236,81 +236,6 @@ const authenticateToken = (req, res, next) => {
 // 4) ROUTES
 // ------------------------------
 
-// Health
-app.get('/api/ping', (req, res) => {
-  res.json({
-    ok: true,
-    originalUrl: req.originalUrl,
-    path: req.path,
-    method: req.method,
-    hasAuthHeader: !!req.headers.authorization,
-  });
-});
-
-// Debug token
-app.get('/api/debug-token', authenticateToken, (req, res) => {
-  res.json({
-    ok: true,
-    userIdentifier: req.userIdentifier,
-  });
-});
-
-// Debug DB + collections counts (requires auth)
-app.get('/api/debug-db', authenticateToken, async (req, res) => {
-  const reqId = req.reqId;
-  try {
-    await connectDB(reqId);
-
-    const dbName = mongoose.connection?.name;
-    const readyState = mongoose.connection?.readyState;
-
-    const usersCount = await User.countDocuments({});
-    const profilesCount = await UserProfile.countDocuments({});
-
-    log('info', reqId, '🧾 DB Debug', { dbName, readyState, usersCount, profilesCount });
-
-    res.json({
-      ok: true,
-      dbName,
-      readyState,
-      usersCount,
-      profilesCount,
-    });
-  } catch (e) {
-    log('error', reqId, '🔴 debug-db failed', { message: e.message });
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET: Retrieve or auto-create profile (raw)
-app.get('/api/profile', authenticateToken, async (req, res) => {
-  const reqId = req.reqId;
-  await connectDB(reqId);
-
-  try {
-    const key = req.userIdentifier;
-
-    log('debug', reqId, '🔎 Looking for UserProfile', { userId: key });
-    let profile = await UserProfile.findOne({ userId: key });
-
-    if (!profile) {
-      log('warn', reqId, '🆕 Profile not found -> creating', { userId: key });
-      profile = await UserProfile.create({ userId: key });
-    }
-
-    res.json(profile);
-  } catch (error) {
-    if (error.code === 11000) {
-      log('warn', reqId, '♻️ Duplicate profile race detected -> refetching', { userId: req.userIdentifier });
-      const profile = await UserProfile.findOne({ userId: req.userIdentifier });
-      return res.json(profile);
-    }
-
-    log('error', reqId, '🔴 /api/profile failed', { message: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // GET: merged user + profile with complete preferences
 app.get('/api/me', authenticateToken, async (req, res) => {
   const reqId = req.reqId;
@@ -549,34 +474,5 @@ app.put('/api/me', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-
-// PUT: raw profile update
-app.put('/api/profile', authenticateToken, async (req, res) => {
-  const reqId = req.reqId;
-  await connectDB(reqId);
-
-  try {
-    const updates = { ...req.body };
-
-    delete updates.userId;
-    delete updates._id;
-    delete updates.createdAt;
-    delete updates.updatedAt;
-
-    log('debug', reqId, '✏️ /api/profile updates', { updates });
-
-    const profile = await UserProfile.findOneAndUpdate(
-      { userId: req.userIdentifier },
-      { $set: updates },
-      { new: true, upsert: true, runValidators: true }
-    );
-
-    res.json(profile);
-  } catch (error) {
-    log('error', reqId, '🔴 /api/profile PUT failed', { message: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message });
-  }
-});
-
 
 module.exports = app;
