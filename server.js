@@ -578,5 +578,5 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ REQUIRED FOR VERCEL
+
 module.exports = app;

@@ -1,53 +1,166 @@
-# EauSure Profile API
+<div align="center">
 
-User profile and preferences backend for the EauSure platform.
+<img
+  src="eausure_header.svg"
+  alt="Logo officiel EauSûre"
+/>
 
-This microservice handles the storage, retrieval, and modification of user-specific metadata and application preferences. It interfaces securely with a MongoDB database and enforces access control via stateless token verification.
+<br/>
 
-## Scope
+<img src="https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
+<img src="https://img.shields.io/badge/Express.js-404D59?style=for-the-badge&logo=express&logoColor=white" alt="Express" />
+<img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
+<img src="https://img.shields.io/badge/JWT-111827?style=for-the-badge&logo=jsonwebtokens&logoColor=white" alt="JWT" />
 
-- Secure retrieval of the authenticated user's profile.
-- Automated, just-in-time provisioning of empty profiles for new users upon initial access.
-- Modification of user metadata (bio, organization, role, phone).
-- Management of application preferences, including notification toggles, measurement units, and language settings.
+</div>
 
-## Route Overview
+# EauSûre Profile API
 
-| Method | Path | Purpose |
-|------|------|------|
-| `GET` | `/api/profile` | Retrieve the current user's profile or auto-create one if missing |
-| `PUT` | `/api/profile` | Update the current user's metadata and preferences |
+API de profil et de préférences utilisateur pour l'écosystème EauSûre.
 
-## Data Architecture
+Elle est consommée par :
+- `Application_Web` pour lire et mettre à jour le profil via une route proxy Next ;
+- `Application_Mobile` pour charger et modifier le profil utilisateur directement.
 
-The application utilizes a structured document schema to encapsulate user data. 
+## Portée
 
-**Core Metadata:**
-Profiles map to a unique identifier derived from the authentication layer. Basic contact and organizational information is stored at the root level of the document.
+L'écosystème backend d'EauSûre repose sur une fragmentation fonctionnelle des APIs. Chaque service couvre un périmètre précis, mais l'ensemble fonctionne de manière complémentaire :
+- **Profile API** : profil utilisateur, préférences et fusion des données `users` + `userProfiles` ;
+- **Auth API** : authentification, identité, jetons d'accès et OAuth ;
+- **Admin API** : administration, pré-enregistrement et gestion des releases firmware ;
+- **Hardware API** : opérations techniques liées aux passerelles, nœuds et échanges terrain.
 
-**Preferences Object:**
-Application settings are grouped into a nested preferences object:
-- **Notifications:** Granular toggles for email alerts, critical-only filtering, daily summaries, and maintenance reminders.
-- **Units:** Localization preferences for temperature (Celsius/Fahrenheit) and distance (Metric/Imperial).
-- **Language:** System language preference.
+Dans cette architecture, `Application_Profile_API` se concentre sur :
+- **lecture du profil enrichi** ;
+- **mise à jour du profil et des préférences** ;
+- **provisionnement automatique d'un profil vide si nécessaire** ;
+- **outils de debug** pour le token et la base.
 
-*Note: Document creation and modification timestamps are automatically managed by the database layer.*
+## Stack
 
-## Security Architecture
+- Express
+- MongoDB avec Mongoose
+- JWT pour valider le token entrant
+- logging applicatif détaillé avec `LOG_LEVEL`
 
-### Protected Endpoints
-All routes interacting with profile data strictly mandate a valid authorization token. The application decodes the token payload to extract the unique user identifier securely, preventing clients from querying or modifying profiles outside their scope.
+## Consommation de l'API
 
-### Immutable Fields
-To maintain data integrity, the application intercepts and sanitizes incoming update payloads. Structural database fields (like `userId`, internal database IDs, and creation timestamps) are strictly protected and stripped from any modification requests.
+### Depuis `Application_Web`
 
-## Environment Configuration
+Le code de `Application_Web` consomme :
+- `GET /api/me`
+- `PUT /api/me`
 
-The application requires specific environmental variables to operate securely without exposing infrastructure details in the source code.
+via [app/api/user/me/route.ts](../Application_Web/app/api/user/me/route.ts).
 
-**Core Infrastructure:**
-- `MONGO_URI`: Target database connection string.
-- `PORT`: Optional. The port for the Express server (defaults to `3000`).
+### Depuis `Application_Mobile`
 
-**Authentication:**
-- `JWT_SECRET`: Cryptographic key utilized to validate the signatures of incoming authorization tokens.
+Le code de `Application_Mobile` consomme :
+- `GET /me`
+- `PUT /me`
+
+via `api/profileClient.js` et `context/ProfileContext.js`.
+
+## Routes exposées
+
+### Routes métier
+
+- `GET /api/me`
+- `PUT /api/me`
+- `GET /api/profile`
+- `PUT /api/profile`
+
+### Routes de debug
+
+- `GET /api/ping`
+- `GET /api/debug-token`
+- `GET /api/debug-db`
+
+## Variables d'environnement
+
+Variables nécessaires au fonctionnement de base :
+- `MONGO_URI`
+- `JWT_SECRET`
+- `PORT`
+
+Variables optionnelles :
+- `LOG_LEVEL`
+
+Valeurs attendues pour `LOG_LEVEL` dans le code :
+- `debug`
+- `info`
+- `warn`
+- `error`
+
+## Fonctionnement
+
+### Authentification
+
+Toutes les routes sensibles exigent un header :
+
+```http
+Authorization: Bearer <token>
+```
+
+Le middleware accepte plusieurs identifiants possibles dans le payload JWT :
+- `email`
+- `id`
+- `userId`
+- `sub`
+
+Le champ résolu est stocké dans `req.userIdentifier`.
+
+### Route `/api/me`
+
+`GET /api/me` :
+- résout d'abord l'utilisateur dans la collection `users` ;
+- tente la recherche par email ;
+- bascule sur `_id` si nécessaire ;
+- charge ensuite le document `userProfiles` ;
+- crée un profil vide si absent ;
+- retourne une vue fusionnée entre `users` et `userProfiles`.
+
+`PUT /api/me` :
+- met à jour certains champs de `users` ;
+- met à jour les préférences et le fuseau dans `userProfiles` ;
+- retourne ensuite une réponse fusionnée.
+
+Champs utilisateur pris en charge :
+- `name`
+- `avatar`
+- `image`
+- `organization`
+- `phone`
+
+Préférences prises en charge :
+- `preferences.theme`
+- `preferences.language`
+- `preferences.notifications.*`
+- `preferences.units.*`
+- `preferences.security.*`
+- `timezone`
+
+### Route `/api/profile`
+
+Cette route manipule plus directement le document `userProfiles`.
+
+`GET /api/profile` :
+- lit le profil brut ;
+- crée un profil vide si absent.
+
+`PUT /api/profile` :
+- applique une mise à jour brute ;
+- protège `userId`, `_id`, `createdAt` et `updatedAt`.
+
+## Point d'audit
+
+Le code client observé utilise surtout `/api/me`, pas `/api/profile`. Cela ne rend pas `/api/profile` inutile automatiquement, mais cela suggère que `/api/me` est aujourd'hui la vraie route métier principale.
+
+De même, les routes `debug-token` et `debug-db` n'ont pas été retrouvées dans `Application_Web` ni `Application_Mobile` pendant cet audit. Elles semblent surtout destinées au diagnostic manuel.
+
+## Lancement local
+
+```bash
+npm install
+npm run dev
+```
